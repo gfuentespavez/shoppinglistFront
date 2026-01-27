@@ -5,6 +5,7 @@
   export let isOpen = false;
   export let onClose;
   export let onSuccess;
+  export let workspaceCode;
 
   let files = [];
   let uploading = false;
@@ -25,6 +26,7 @@
       try {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('workspaceCode', workspaceCode);
 
         await axios.post(`${API_URL}/api/upload`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }

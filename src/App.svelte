@@ -1,11 +1,14 @@
 <script>
+  import { onMount } from 'svelte';
   import axios from 'axios';
   import { API_URL } from './lib/config.js';
+  import WorkspaceLogin from './lib/WorkspaceLogin.svelte';
   import ListSelector from './lib/ListSelector.svelte';
   import CategorySelector from './lib/CategorySelector.svelte';
   import ItemsView from './lib/ItemsView.svelte';
   import UploadModal from './lib/UploadModal.svelte';
 
+  let workspaceCode = null;
   let view = 'lists';
   let selectedList = null;
   let selectedCategory = null;
@@ -14,6 +17,26 @@
   let allItems = [];
   let isUploadModalOpen = false;
   let listSelectorComponent;
+
+  onMount(() => {
+    // Verificar si ya hay un workspace guardado
+    const savedWorkspace = localStorage.getItem('workspaceCode');
+    if (savedWorkspace) {
+      workspaceCode = savedWorkspace;
+    }
+  });
+
+  function handleLogin(code) {
+    workspaceCode = code;
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('workspaceCode');
+    workspaceCode = null;
+    view = 'lists';
+    selectedList = null;
+    selectedCategory = null;
+  }
 
   async function handleSelectList(list) {
     selectedList = list;
@@ -62,35 +85,44 @@
   }
 </script>
 
-<main>
-  {#if view === 'lists'}
-    <ListSelector bind:this={listSelectorComponent} onSelectList={handleSelectList} />
-  {:else if view === 'categories'}
-    <CategorySelector
-            categories={categories}
-            listName={selectedList.name}
-            onSelectCategory={handleSelectCategory}
-            onBack={backToLists}
-    />
-  {:else if view === 'items'}
-    <ItemsView
-            items={items}
-            category={selectedCategory}
-            listName={selectedList.name}
-            onBack={backToCategories}
-    />
-  {/if}
+{#if !workspaceCode}
+  <WorkspaceLogin onLogin={handleLogin} />
+{:else}
+  <main>
+    {#if view === 'lists'}
+      <ListSelector bind:this={listSelectorComponent} onSelectList={handleSelectList} {workspaceCode} />
+    {:else if view === 'categories'}
+      <CategorySelector
+              categories={categories}
+              listName={selectedList.name}
+              onSelectCategory={handleSelectCategory}
+              onBack={backToLists}
+      />
+    {:else if view === 'items'}
+      <ItemsView
+              items={items}
+              category={selectedCategory}
+              listName={selectedList.name}
+              onBack={backToCategories}
+      />
+    {/if}
 
-  <button class="fab" on:click={openUploadModal}>
-    +
-  </button>
+    <button class="fab" on:click={openUploadModal}>
+      +
+    </button>
 
-  <UploadModal
-          isOpen={isUploadModalOpen}
-          onClose={closeUploadModal}
-          onSuccess={handleUploadSuccess}
-  />
-</main>
+    <button class="logout-btn" on:click={handleLogout}>
+      Cambiar código
+    </button>
+
+    <UploadModal
+            isOpen={isUploadModalOpen}
+            onClose={closeUploadModal}
+            onSuccess={handleUploadSuccess}
+            {workspaceCode}
+    />
+  </main>
+{/if}
 
 <style>
   main {
@@ -125,5 +157,26 @@
 
   .fab:hover {
     box-shadow: 0 12px 32px rgba(91, 159, 216, 0.5);
+  }
+
+  .logout-btn {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    padding: 8px 16px;
+    background: white;
+    color: #64748B;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 100;
+  }
+
+  .logout-btn:active {
+    transform: scale(0.95);
+    background: #F1F5F9;
   }
 </style>

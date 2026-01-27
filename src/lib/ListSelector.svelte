@@ -4,6 +4,7 @@
   import { API_URL } from './config.js';
 
   export let onSelectList;
+  export let workspaceCode;
 
   let lists = [];
   let loading = true;
@@ -24,7 +25,7 @@
   async function loadLists() {
     loading = true;
     try {
-      const response = await axios.get(`${API_URL}/api/lists`);
+      const response = await axios.get(`${API_URL}/api/lists?workspaceCode=${workspaceCode}`);
       lists = response.data;
 
       // Cargar estadísticas para cada lista
