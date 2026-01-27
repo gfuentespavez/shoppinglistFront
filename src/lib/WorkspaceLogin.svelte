@@ -35,7 +35,7 @@
                     class="code-input"
                     bind:value={workspaceCode}
                     on:keydown={handleKeydown}
-                    placeholder="Ej: CITYLAB2026"
+                    placeholder="Ej: Familia_XYZ"
                     maxlength="20"
                     autofocus
             />
