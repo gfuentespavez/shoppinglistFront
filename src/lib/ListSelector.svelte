@@ -10,6 +10,7 @@
   let editingId = null;
   let editingName = '';
   let listStats = {};
+  let deletingId = null;
 
   function normalizeText(text) {
     if (!text) return '';
@@ -23,7 +24,7 @@
   async function loadLists() {
     loading = true;
     try {
-      const response = await axios.get('http://localhost:8080/api/lists');
+      const response = await axios.get(`${API_URL}/api/lists`);
       lists = response.data;
 
       // Cargar estadísticas para cada lista
@@ -38,7 +39,7 @@
 
   async function loadStats(listId) {
     try {
-      const response = await axios.get(`http://localhost:8080/api/lists/${listId}/stats`);
+      const response = await axios.get(`${API_URL}/api/lists/${listId}/stats`);
       listStats[listId] = response.data;
       listStats = listStats; // trigger reactivity
     } catch (error) {
@@ -65,7 +66,7 @@
     }
 
     try {
-      await axios.patch(`http://localhost:8080/api/lists/${list.id}`, {
+      await axios.patch(`${API_URL}/api/lists/${list.id}`, {
         name: editingName
       });
       list.name = editingName;
@@ -87,6 +88,25 @@
     } else if (event.key === 'Escape') {
       cancelEdit();
     }
+  }
+
+  async function deleteList(list, event) {
+    event.stopPropagation();
+    
+    if (!confirm(`¿Seguro que quieres eliminar "${normalizeText(list.name)}"?`)) {
+      return;
+    }
+
+    deletingId = list.id;
+    try {
+      await axios.delete(`${API_URL}/api/lists/${list.id}`);
+      lists = lists.filter(l => l.id !== list.id);
+      delete listStats[list.id];
+    } catch (error) {
+      console.error('Error eliminando lista:', error);
+      alert('Error al eliminar la lista');
+    }
+    deletingId = null;
   }
 
   function getProgress(listId) {
@@ -115,7 +135,7 @@
   {:else}
     <div class="grid">
       {#each lists as list}
-        <div class="list-card" on:click={() => selectList(list)}>
+        <div class="list-card" on:click={() => selectList(list)} class:deleting={deletingId === list.id}>
           {#if editingId === list.id}
             <input
               type="text"
@@ -132,6 +152,9 @@
                 <div class="actions">
                   <button class="edit-btn" on:click={(e) => startEditing(list, e)}>
                     ✎
+                  </button>
+                  <button class="delete-btn" on:click={(e) => deleteList(list, e)}>
+                    🗑️
                   </button>
                   <span class="arrow">→</span>
                 </div>
@@ -207,6 +230,11 @@
     box-shadow: 0 2px 8px rgba(91, 159, 216, 0.15);
   }
 
+  .list-card.deleting {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
   .card-content {
     display: flex;
     flex-direction: column;
@@ -229,17 +257,16 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
   }
 
-  .edit-btn {
+  .edit-btn, .delete-btn {
     background: #F1F5F9;
     border: none;
     width: 36px;
     height: 36px;
     border-radius: 10px;
     font-size: 18px;
-    color: #5B9FD8;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -247,7 +274,15 @@
     transition: all 0.2s;
   }
 
-  .edit-btn:active {
+  .edit-btn {
+    color: #5B9FD8;
+  }
+
+  .delete-btn {
+    color: #EF4444;
+  }
+
+  .edit-btn:active, .delete-btn:active {
     background: #E2E8F0;
     transform: scale(0.95);
   }
