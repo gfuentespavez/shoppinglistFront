@@ -6,6 +6,8 @@
   export let category;
   export let listName;
   export let onBack;
+  export let isConsolidated = false; // Nueva prop
+  export let onToggleConsolidated = null; // Nueva prop
 
   function normalizeText(text) {
     if (!text) return '';
@@ -17,6 +19,13 @@
   }
 
   async function toggleItem(item) {
+    // Si es lista consolidada, usar la función especial
+    if (isConsolidated && onToggleConsolidated) {
+      await onToggleConsolidated(item);
+      return;
+    }
+
+    // Toggle normal para listas regulares
     try {
       await axios.patch(`${API_URL}/api/items/${item.id}`, {
         checked: !item.checked
@@ -36,6 +45,9 @@
     </button>
     <h1>{normalizeText(category)}</h1>
     <p class="subtitle">{normalizeText(listName)}</p>
+    {#if isConsolidated}
+      <p class="consolidated-note">💡 Al marcar un item, se marca en todas las listas</p>
+    {/if}
   </header>
 
   <div class="items-list">
@@ -96,6 +108,16 @@
     font-size: 16px;
     font-weight: 400;
     color: #64748B;
+  }
+
+  .consolidated-note {
+    font-size: 14px;
+    color: #5B9FD8;
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: #EFF6FF;
+    border-radius: 12px;
+    font-weight: 500;
   }
 
   .items-list {

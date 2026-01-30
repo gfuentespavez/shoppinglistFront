@@ -17,6 +17,7 @@
   let allItems = [];
   let isUploadModalOpen = false;
   let listSelectorComponent;
+  let allLists = []; // Para generar la lista consolidada
 
   onMount(() => {
     // Verificar si ya hay un workspace guardado
@@ -38,18 +39,94 @@
     selectedCategory = null;
   }
 
+  // Función para normalizar nombres de items
+  function normalizeItemName(name) {
+    return name.trim().toLowerCase()
+            .replace(/s$/, '') // quitar plural simple
+            .replace(/es$/, ''); // quitar plural -es
+  }
+
+  // Función para extraer cantidad del texto
+  function extractQuantity(text) {
+    const match = text.match(/^(\d+)\s+/);
+    return match ? parseInt(match[1]) : 1;
+  }
+
+  // Función para generar la lista consolidada
+  async function generateConsolidatedList() {
+    if (!allLists || allLists.length === 0) return null;
+
+    // Objeto para agrupar items por nombre normalizado
+    const consolidatedItems = {};
+
+    // Recorrer todas las listas y sus items
+    for (const list of allLists) {
+      try {
+        const response = await axios.get(`${API_URL}/api/lists/${list.id}/items`);
+        const listItems = response.data;
+
+        for (const item of listItems) {
+          const normalizedName = normalizeItemName(item.name);
+          const quantity = extractQuantity(item.name);
+
+          if (!consolidatedItems[normalizedName]) {
+            consolidatedItems[normalizedName] = {
+              originalName: item.name.replace(/^\d+\s+/, ''), // nombre sin cantidad
+              totalQuantity: 0,
+              category: item.category,
+              sourceItems: [] // referencias a items originales
+            };
+          }
+
+          consolidatedItems[normalizedName].totalQuantity += quantity;
+          consolidatedItems[normalizedName].sourceItems.push({
+            listId: list.id,
+            itemId: item.id,
+            checked: item.checked
+          });
+        }
+      } catch (error) {
+        console.error(`Error cargando items de lista ${list.id}:`, error);
+      }
+    }
+
+    // Convertir a array de items
+    const consolidatedItemsArray = Object.entries(consolidatedItems).map(([key, value]) => ({
+      id: `consolidated-${key}`,
+      name: `${value.totalQuantity} ${value.originalName}`,
+      category: value.category,
+      checked: value.sourceItems.every(si => si.checked), // checked solo si TODOS están checked
+      sourceItems: value.sourceItems
+    }));
+
+    return {
+      id: 'CONSOLIDATED',
+      name: '📋 Lista Consolidada',
+      items: consolidatedItemsArray
+    };
+  }
+
   async function handleSelectList(list) {
     selectedList = list;
 
-    try {
-      const response = await axios.get(`${API_URL}/api/lists/${list.id}/items`);
-      allItems = response.data;
-
-      categories = [...new Set(allItems.map(item => item.category))];
-
-      view = 'categories';
-    } catch (error) {
-      console.error('Error cargando items:', error);
+    // Si es la lista consolidada, generar sus items dinámicamente
+    if (list.id === 'CONSOLIDATED') {
+      const consolidatedList = await generateConsolidatedList();
+      if (consolidatedList) {
+        allItems = consolidatedList.items;
+        categories = [...new Set(allItems.map(item => item.category))];
+        view = 'categories';
+      }
+    } else {
+      // Lista normal
+      try {
+        const response = await axios.get(`${API_URL}/api/lists/${list.id}/items`);
+        allItems = response.data;
+        categories = [...new Set(allItems.map(item => item.category))];
+        view = 'categories';
+      } catch (error) {
+        console.error('Error cargando items:', error);
+      }
     }
   }
 
@@ -83,6 +160,37 @@
       listSelectorComponent.refresh();
     }
   }
+
+  // Función para manejar el toggle de items consolidados
+  async function handleToggleConsolidatedItem(item) {
+    if (!item.sourceItems) return;
+
+    const newCheckedState = !item.checked;
+
+    // Actualizar todos los items originales
+    for (const sourceItem of item.sourceItems) {
+      try {
+        await axios.put(`${API_URL}/api/items/${sourceItem.itemId}`, {
+          checked: newCheckedState
+        });
+      } catch (error) {
+        console.error(`Error actualizando item ${sourceItem.itemId}:`, error);
+      }
+    }
+
+    // Actualizar el estado local
+    item.checked = newCheckedState;
+    items = items; // trigger reactivity
+  }
+
+  // Exponer función para que ItemsView pueda llamarla
+  function handleItemToggle(item) {
+    if (selectedList?.id === 'CONSOLIDATED') {
+      return handleToggleConsolidatedItem(item);
+    }
+    // Si no es consolidada, ItemsView maneja el toggle normal
+    return null;
+  }
 </script>
 
 {#if !workspaceCode}
@@ -90,7 +198,12 @@
 {:else}
   <main>
     {#if view === 'lists'}
-      <ListSelector bind:this={listSelectorComponent} onSelectList={handleSelectList} {workspaceCode} />
+      <ListSelector
+              bind:this={listSelectorComponent}
+              bind:allLists={allLists}
+              onSelectList={handleSelectList}
+              {workspaceCode}
+      />
     {:else if view === 'categories'}
       <CategorySelector
               categories={categories}
@@ -103,6 +216,8 @@
               items={items}
               category={selectedCategory}
               listName={selectedList.name}
+              isConsolidated={selectedList?.id === 'CONSOLIDATED'}
+              onToggleConsolidated={handleItemToggle}
               onBack={backToCategories}
       />
     {/if}

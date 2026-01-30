@@ -5,6 +5,7 @@
 
   export let onSelectList;
   export let workspaceCode;
+  export let allLists = []; // Para que App.svelte pueda acceder a las listas
 
   let lists = [];
   let loading = true;
@@ -16,10 +17,10 @@
   function normalizeText(text) {
     if (!text) return '';
     return text
-      .toLowerCase()
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+            .toLowerCase()
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
   }
 
   async function loadLists() {
@@ -27,6 +28,7 @@
     try {
       const response = await axios.get(`${API_URL}/api/lists?workspaceCode=${workspaceCode}`);
       lists = response.data;
+      allLists = lists; // Actualizar para App.svelte
 
       // Cargar estadísticas para cada lista
       for (const list of lists) {
@@ -93,7 +95,7 @@
 
   async function deleteList(list, event) {
     event.stopPropagation();
-    
+
     if (!confirm(`¿Seguro que quieres eliminar "${normalizeText(list.name)}"?`)) {
       return;
     }
@@ -102,6 +104,7 @@
     try {
       await axios.delete(`${API_URL}/api/lists/${list.id}`);
       lists = lists.filter(l => l.id !== list.id);
+      allLists = lists; // Actualizar
       delete listStats[list.id];
     } catch (error) {
       console.error('Error eliminando lista:', error);
@@ -135,16 +138,30 @@
     <p class="empty">No hay listas disponibles</p>
   {:else}
     <div class="grid">
+      <!-- Lista consolidada (solo si hay más de una lista) -->
+      {#if lists.length > 1}
+        <div class="list-card consolidated" on:click={() => selectList({ id: 'CONSOLIDATED', name: '📋 Lista Consolidada' })}>
+          <div class="card-content">
+            <div class="card-header">
+              <span class="list-name">📋 Lista Consolidada</span>
+              <span class="arrow">→</span>
+            </div>
+            <p class="consolidated-desc">Ver todos los items agrupados</p>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Listas normales -->
       {#each lists as list}
         <div class="list-card" on:click={() => selectList(list)} class:deleting={deletingId === list.id}>
           {#if editingId === list.id}
             <input
-              type="text"
-              class="edit-input"
-              bind:value={editingName}
-              on:keydown={(e) => handleKeydown(e, list)}
-              on:blur={() => saveEdit(list)}
-              autofocus
+                    type="text"
+                    class="edit-input"
+                    bind:value={editingName}
+                    on:keydown={(e) => handleKeydown(e, list)}
+                    on:blur={() => saveEdit(list)}
+                    autofocus
             />
           {:else}
             <div class="card-content">
@@ -165,8 +182,8 @@
                 <div class="stats">
                   <div class="progress-bar">
                     <div
-                      class="progress-fill"
-                      style="width: {getProgress(list.id)}%"
+                            class="progress-fill"
+                            style="width: {getProgress(list.id)}%"
                     ></div>
                   </div>
                   <div class="stats-text">
@@ -224,6 +241,26 @@
     cursor: pointer;
     transition: all 0.2s ease;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+
+  .list-card.consolidated {
+    background: linear-gradient(135deg, #5B9FD8 0%, #4A8BC2 100%);
+    color: white;
+  }
+
+  .list-card.consolidated .list-name {
+    color: white;
+  }
+
+  .list-card.consolidated .arrow {
+    color: white;
+  }
+
+  .consolidated-desc {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0;
+    font-weight: 400;
   }
 
   .list-card:active {
