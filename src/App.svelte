@@ -40,38 +40,54 @@
   }
 
   // Función para normalizar nombres de items
-  function normalizeItemName(name) {
-    return name.trim().toLowerCase()
+  function normalizeItemName(description) {
+    if (!description) return '';
+    return description.trim().toLowerCase()
             .replace(/s$/, '') // quitar plural simple
             .replace(/es$/, ''); // quitar plural -es
   }
 
-  // Función para extraer cantidad del texto
-  function extractQuantity(text) {
-    const match = text.match(/^(\d+)\s+/);
-    return match ? parseInt(match[1]) : 1;
+  // Función para extraer cantidad (ya viene en item.quantity)
+  function getQuantity(item) {
+    // Si quantity es string como "2", convertir a número
+    if (typeof item.quantity === 'string') {
+      const num = parseInt(item.quantity);
+      return isNaN(num) ? 1 : num;
+    }
+    return item.quantity || 1;
   }
 
   // Función para generar la lista consolidada
   async function generateConsolidatedList() {
-    if (!allLists || allLists.length === 0) return null;
+    console.log('=== Generando lista consolidada ===');
+    console.log('Listas disponibles:', allLists);
+
+    if (!allLists || allLists.length === 0) {
+      console.log('No hay listas disponibles');
+      return null;
+    }
 
     // Objeto para agrupar items por nombre normalizado
     const consolidatedItems = {};
 
     // Recorrer todas las listas y sus items
     for (const list of allLists) {
+      console.log(`Procesando lista: ${list.name} (ID: ${list.id})`);
+
       try {
         const response = await axios.get(`${API_URL}/api/lists/${list.id}/items`);
         const listItems = response.data;
+        console.log(`  Items encontrados: ${listItems.length}`, listItems);
 
         for (const item of listItems) {
-          const normalizedName = normalizeItemName(item.name);
-          const quantity = extractQuantity(item.name);
+          const normalizedName = normalizeItemName(item.description);
+          const quantity = getQuantity(item);
+
+          console.log(`  - Item: "${item.description}" (cantidad: ${item.quantity}) → normalizado: "${normalizedName}", cantidad: ${quantity}`);
 
           if (!consolidatedItems[normalizedName]) {
             consolidatedItems[normalizedName] = {
-              originalName: item.name.replace(/^\d+\s+/, ''), // nombre sin cantidad
+              originalDescription: item.description,
               totalQuantity: 0,
               category: item.category,
               sourceItems: [] // referencias a items originales
@@ -90,14 +106,19 @@
       }
     }
 
+    console.log('Items consolidados:', consolidatedItems);
+
     // Convertir a array de items
     const consolidatedItemsArray = Object.entries(consolidatedItems).map(([key, value]) => ({
       id: `consolidated-${key}`,
-      name: `${value.totalQuantity} ${value.originalName}`,
+      quantity: value.totalQuantity.toString(),
+      description: value.originalDescription,
       category: value.category,
       checked: value.sourceItems.every(si => si.checked), // checked solo si TODOS están checked
       sourceItems: value.sourceItems
     }));
+
+    console.log('Array final de items consolidados:', consolidatedItemsArray);
 
     return {
       id: 'CONSOLIDATED',
@@ -170,7 +191,7 @@
     // Actualizar todos los items originales
     for (const sourceItem of item.sourceItems) {
       try {
-        await axios.put(`${API_URL}/api/items/${sourceItem.itemId}`, {
+        await axios.patch(`${API_URL}/api/items/${sourceItem.itemId}`, {
           checked: newCheckedState
         });
       } catch (error) {
